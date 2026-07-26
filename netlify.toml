@@ -5,9 +5,15 @@
 
 [build]
   base = "packages/cloud-license-service"
-  command = "echo 'no build step for the license API (functions are bundled by esbuild)'"
+  command = "echo 'no build step for the license API (functions are bundled by nft)'"
   functions = "netlify/functions"
   publish = "public"
+
+[build.environment]
+  # Netlify uses pnpm v10 but local dev uses pnpm v11 — their lockfile formats
+  # are incompatible.  Skip strict lockfile checking so installation can still
+  # proceed; real versions are still pinned by package.json ranges.
+  NPM_FLAGS = "--no-frozen-lockfile"
 
 [functions]
   # Use `nft` (not `esbuild`) so the native `sqlite3` module is treated as an
