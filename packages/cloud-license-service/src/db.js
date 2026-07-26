@@ -10,8 +10,11 @@ import dotenv from 'dotenv'
 // a harmless no-op.
 dotenv.config()
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+// ESM-compatible __dirname replacement.
+// Renamed from __filename/__dirname to avoid conflicts with Netlify's nft bundler,
+// which injects its own module-level variables with those names.
+const _filename = fileURLToPath(import.meta.url)
+const _dirname = path.dirname(_filename)
 
 // When DATABASE_URL is set (Netlify + Supabase deployment), use Postgres.
 // Otherwise fall back to the local SQLite file so local development keeps
@@ -57,7 +60,7 @@ CREATE TABLE IF NOT EXISTS heartbeat_logs (
 let sqliteDriver = null
 function getSqlite() {
   if (!sqliteDriver) {
-    const dbDir = path.join(__dirname, '../data')
+    const dbDir = path.join(_dirname, '../data')
     fs.mkdirSync(dbDir, { recursive: true })
     sqliteDriver = new sqlite3.Database(path.join(dbDir, 'license.db'))
     sqliteDriver.exec(initSql)
