@@ -1,7 +1,12 @@
 import express from 'express'
 import cors from 'cors'
-import licenseRoutes from './routes/license.js'
-import adminRoutes from './routes/admin.js'
+import licenseRoutesModule from './routes/license.js'
+import adminRoutesModule from './routes/admin.js'
+
+// Netlify's nft bundler may wrap ESM default exports as { default: X }
+// instead of the plain Router object.  Unwrap if needed.
+const licenseRoutes = licenseRoutesModule.default || licenseRoutesModule
+const adminRoutes = adminRoutesModule.default || adminRoutesModule
 
 // `origin: true` reflects the caller's Origin so the same API works for the
 // local dev SPA (localhost:5173), the packaged app, and any hosted admin

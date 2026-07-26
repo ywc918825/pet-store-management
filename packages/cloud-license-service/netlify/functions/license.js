@@ -1,5 +1,8 @@
 import serverless from 'serverless-http'
-import app from '../../src/app.js'
+import appModule from '../../src/app.js'
+
+// Netlify's nft bundler may wrap ESM default exports as { default: X }.
+const app = appModule.default || appModule
 
 // serverless-http wraps the Express app as a Netlify Function. The redirect in
 // netlify.toml forwards "/api/*" to "/.netlify/functions/license/api/:splat",
