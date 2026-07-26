@@ -1,0 +1,27 @@
+{
+  "name": "pet-store-local-server",
+  "version": "1.0.0",
+  "description": "Local business API server and database for pet store",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/index.js",
+    "build": "echo 'No build step for Node server'",
+    "migrate": "node scripts/migrate.js",
+    "seed": "node scripts/seed.js"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "cors": "^2.8.0",
+    "mysql2": "^3.9.0",
+    "bcryptjs": "^2.4.0",
+    "jsonwebtoken": "^9.0.0",
+    "dayjs": "^1.11.0",
+    "node-cron": "^3.0.0",
+    "uuid": "^9.0.0",
+    "multer": "^1.4.0",
+    "node-machine-id": "^1.1.0",
+    "axios": "^1.6.0",
+    "dotenv": "^16.4.0"
+  }
+}

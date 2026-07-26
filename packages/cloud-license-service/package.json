@@ -1,0 +1,25 @@
+{
+  "name": "pet-store-cloud-license",
+  "version": "1.0.0",
+  "description": "Mock cloud license service for pet store activation and heartbeat",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/index.js",
+    "build": "echo 'No build step for Node license server'",
+    "seed": "node scripts/seed.js",
+    "dev:netlify": "netlify dev"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "cors": "^2.8.0",
+    "sqlite3": "^5.1.0",
+    "pg": "^8.11.0",
+    "serverless-http": "^3.2.0",
+    "bcryptjs": "^2.4.0",
+    "jsonwebtoken": "^9.0.0",
+    "uuid": "^9.0.0",
+    "dayjs": "^1.11.0",
+    "dotenv": "^16.4.0"
+  }
+}

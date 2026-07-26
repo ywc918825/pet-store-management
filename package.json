@@ -1,0 +1,19 @@
+{
+  "name": "pet-store-management",
+  "version": "1.0.0",
+  "description": "Community pet store desktop management system with local deployment + cloud licensing",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:cloud": "npm run dev -w packages/cloud-license-service",
+    "dev:server": "npm run dev -w packages/local-server",
+    "dev:client": "npm run dev -w packages/client",
+    "dev": "concurrently \"npm run dev:cloud\" \"npm run dev:server\" \"npm run dev:client\"",
+    "build": "npm run build -w packages/client && npm run build -w packages/local-server && npm run build -w packages/cloud-license-service"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}

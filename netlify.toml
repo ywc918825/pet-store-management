@@ -1,0 +1,32 @@
+# Netlify config for the PET-STORE cloud license service.
+# This file lives at the monorepo ROOT so the "Deploy to Netlify" button can
+# find it automatically. `base` tells Netlify to build from the package that
+# actually contains the serverless function + its package.json.
+
+[build]
+  base = "packages/cloud-license-service"
+  command = "echo 'no build step for the license API (functions are bundled by esbuild)'"
+  functions = "netlify/functions"
+  publish = "public"
+
+[functions]
+  # Use `nft` (not `esbuild`) so the native `sqlite3` module is treated as an
+  # external asset instead of being inlined (esbuild would fail to bundle it).
+  node_bundler = "nft"
+
+# Forward every /api/* request to the license function, preserving the sub-path
+# (splat) so the Express routers inside the function still see /api/license and
+# /api/admin. The function then strips the leading function prefix (see
+# netlify/functions/license.js).
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/license/api/:splat"
+  status = 200
+
+# CORS headers for browser-based callers (admin console, packaged app).
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Headers = "Content-Type, Authorization, x-machine-id, x-issue-key"
+    Access-Control-Allow-Methods = "GET, POST, PATCH, PUT, DELETE, OPTIONS"
