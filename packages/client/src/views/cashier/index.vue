@@ -3,10 +3,10 @@
     <div class="cashier-left">
       <div class="service-tabs">
         <el-radio-group v-model="activeCategory" size="large">
-          <el-radio-button label="wash">洗护</el-radio-button>
-          <el-radio-button label="groom">美容</el-radio-button>
-          <el-radio-button label="foster">寄养</el-radio-button>
-          <el-radio-button label="retail">零售</el-radio-button>
+          <el-radio-button value="wash">洗护</el-radio-button>
+          <el-radio-button value="groom">美容</el-radio-button>
+          <el-radio-button value="foster">寄养</el-radio-button>
+          <el-radio-button value="retail">零售</el-radio-button>
         </el-radio-group>
       </div>
       <div class="item-grid">
