@@ -10,7 +10,7 @@
     "dev:cloud": "npm run dev -w packages/cloud-license-service",
     "dev:server": "npm run dev -w packages/local-server",
     "dev:client": "npm run dev -w packages/client",
-    "dev": "concurrently \"npm run dev:cloud\" \"npm run dev:server\" \"npm run dev:client\"",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "build": "npm run build -w packages/client && npm run build -w packages/local-server && npm run build -w packages/cloud-license-service"
   },
   "devDependencies": {
