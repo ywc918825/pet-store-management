@@ -10,15 +10,25 @@
         </el-radio-group>
       </div>
       <div class="item-grid">
-        <div v-for="item in filteredItems" :key="item.id" class="item-card" @click="addToCart(item)">
+        <div
+          v-for="item in filteredItems"
+          :key="item._key"
+          class="item-card"
+          :class="{ 'is-custom': item._isCustom }"
+          @click="addToCart(item)"
+        >
+          <div class="item-delete" v-if="item._isCustom" @click.stop="handleDeleteCustom(item)">
+            <el-icon :size="14"><Close /></el-icon>
+          </div>
           <div class="item-name">{{ item.name }}</div>
           <div class="item-price">¥{{ item.price }}</div>
-          <div v-if="activeCategory === 'retail'" class="item-stock">库存: {{ item.stock || 0 }}</div>
+          <div v-if="activeCategory === 'retail' && !item._isCustom" class="item-stock">库存: {{ item.stock || 0 }}</div>
+          <div v-if="item._isCustom" class="item-tag">自定义</div>
         </div>
       </div>
       <div class="custom-add">
-        <el-button type="primary" plain size="large" @click="openCustomDialog" style="width:100%">
-          <el-icon><Plus /></el-icon> 自定义品项
+        <el-button type="primary" plain size="large" @click="openCustomDialog" style="width:100%" :loading="saving">
+          <el-icon><Plus /></el-icon> 添加到面板
         </el-button>
       </div>
     </div>
@@ -32,7 +42,7 @@
           <div>
             <div>
               {{ item.itemName }}
-              <el-tag v-if="item._custom" size="small" type="warning" style="margin-left:4px">自定义</el-tag>
+              <el-tag v-if="item.itemType === 'custom'" size="small" type="warning" style="margin-left:4px">自定义</el-tag>
             </div>
             <div class="item-sub">¥{{ item.price }} × {{ item.quantity }}</div>
           </div>
@@ -41,7 +51,7 @@
             <el-button link type="danger" @click="cart.splice(idx, 1)">删除</el-button>
           </div>
         </div>
-        <el-empty v-if="cart.length === 0" description="点击品项或「自定义品项」添加" />
+        <el-empty v-if="cart.length === 0" description="点击品项加入购物车,或点「添加到面板」创建自定义品项" />
       </div>
       <div class="cart-footer">
         <div class="member-select">
@@ -93,7 +103,7 @@
         <p>时间：{{ new Date().toLocaleString() }}</p>
         <el-divider />
         <div v-for="(item, idx) in cart" :key="idx" class="receipt-line">
-          <span>{{ item.itemName }}{{ item._custom ? ' (自定义)' : '' }}</span>
+          <span>{{ item.itemName }}{{ item.itemType === 'custom' ? ' (自定义)' : '' }}</span>
           <span>¥{{ (item.price * item.quantity).toFixed(2) }}</span>
         </div>
         <el-divider />
@@ -123,9 +133,9 @@
       </template>
     </el-dialog>
 
-    <!-- Custom item dialog -->
-    <el-dialog v-model="customItemVisible" title="自定义品项" width="400px" align-center>
-      <el-form :model="customForm" label-width="80px">
+    <!-- Custom item dialog — saves to panel as persistent card -->
+    <el-dialog v-model="customItemVisible" title="添加自定义品项到面板" width="400px" align-center>
+      <el-form :model="customForm" label-width="80px" @submit.prevent>
         <el-form-item label="类别">
           <el-select v-model="customForm.category" style="width:100%">
             <el-option label="洗护" value="wash" />
@@ -135,7 +145,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="名称">
-          <el-input v-model="customForm.name" placeholder="如：剪指甲、清理耳道、狗粮500g" />
+          <el-input v-model="customForm.name" placeholder="如：剪指甲、清理耳道、狗粮500g" @keyup.enter="saveCustomItem" />
         </el-form-item>
         <el-form-item label="单价(¥)">
           <el-input-number v-model="customForm.price" :min="0.01" :precision="2" style="width:100%" />
@@ -143,7 +153,7 @@
       </el-form>
       <template #footer>
         <el-button @click="customItemVisible = false">取消</el-button>
-        <el-button type="primary" @click="addCustomItem">加入购物车</el-button>
+        <el-button type="primary" @click="saveCustomItem" :loading="saving">保存到面板</el-button>
       </template>
     </el-dialog>
   </div>
@@ -151,8 +161,8 @@
 
 <script setup>
 import { ref, computed, reactive, onMounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { getServiceItems, getShopProducts, createOrder } from '@/api/cashier'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getServiceItems, getShopProducts, getCustomItems, createCustomItem, deleteCustomItem, createOrder } from '@/api/cashier'
 import { getMemberList } from '@/api/member'
 import { useLicenseStore } from '@/store/modules/license'
 
@@ -160,6 +170,7 @@ const licenseStore = useLicenseStore()
 const activeCategory = ref('wash')
 const serviceItems = ref([])
 const products = ref([])
+const customItems = ref([])
 const cart = ref([])
 const selectedMember = ref(null)
 const memberOptions = ref([])
@@ -168,6 +179,7 @@ const walkInCustomer = ref(false)
 const paymentMethod = ref('cash')
 const receivedAmount = ref(0)
 const receiptVisible = ref(false)
+const saving = ref(false)
 const lastOrder = reactive({ orderNo: '' })
 
 // --- Custom item dialog ---
@@ -177,14 +189,23 @@ const customForm = reactive({ category: 'wash', name: '', price: 0 })
 const payLabel = (m) => ({ cash: '现金', wechat: '微信', alipay: '支付宝', balance: '余额' }[m] || m)
 
 const filteredItems = computed(() => {
-  if (activeCategory.value === 'retail') return products.value
-  return serviceItems.value.filter(i => i.category === activeCategory.value)
+  // Custom items: filter by category + tag as _isCustom
+  const custom = customItems.value
+    .filter(i => i.category === activeCategory.value)
+    .map(i => ({ ...i, _key: 'c' + i.id, _isCustom: true, price: Number(i.price) }))
+
+  if (activeCategory.value === 'retail') {
+    return [...products.value.map(p => ({ ...p, _key: 'p' + p.id })), ...custom]
+  }
+  return [
+    ...serviceItems.value.filter(i => i.category === activeCategory.value).map(i => ({ ...i, _key: 's' + i.id })),
+    ...custom
+  ]
 })
 
 const totalAmount = computed(() => cart.value.reduce((sum, i) => sum + i.price * i.quantity, 0).toFixed(2))
 const changeAmount = computed(() => Math.max(0, receivedAmount.value - Number(totalAmount.value)))
 
-// When walk-in toggles, clear member and reset payment if balance
 const onWalkInChange = (val) => {
   if (val) {
     selectedMember.value = null
@@ -192,25 +213,24 @@ const onWalkInChange = (val) => {
   }
 }
 
-// When member is selected, uncheck walk-in
 watch(selectedMember, (val) => {
   if (val) walkInCustomer.value = false
 })
 
 const loadItems = async () => {
-  const [services, prods] = await Promise.all([
+  const [services, prods, custom] = await Promise.all([
     getServiceItems(),
-    getShopProducts()
+    getShopProducts(),
+    getCustomItems()
   ])
   serviceItems.value = services
   products.value = prods.map(p => ({
-    ...p,
-    category: 'retail',
-    price: Number(p.price),
-    stock: Number(p.stock || 0)
+    ...p, category: 'retail', price: Number(p.price), stock: Number(p.stock || 0)
   }))
+  customItems.value = custom
 }
 
+// --- Custom item save (backend → card) ---
 const openCustomDialog = () => {
   customForm.category = activeCategory.value
   customForm.name = ''
@@ -218,19 +238,40 @@ const openCustomDialog = () => {
   customItemVisible.value = true
 }
 
-const addCustomItem = () => {
+const saveCustomItem = async () => {
   if (!customForm.name.trim()) return ElMessage.warning('请输入品项名称')
   if (!customForm.price || customForm.price <= 0) return ElMessage.warning('请输入有效单价')
-  cart.value.push({
-    itemType: 'custom',
-    itemId: null,
-    itemName: customForm.name.trim(),
-    price: Number(customForm.price),
-    cost: 0,
-    quantity: 1,
-    _custom: true
-  })
-  customItemVisible.value = false
+  saving.value = true
+  try {
+    await createCustomItem({
+      category: customForm.category,
+      name: customForm.name.trim(),
+      price: Number(customForm.price)
+    })
+    customItemVisible.value = false
+    ElMessage.success('已保存到面板')
+    // Reload custom items so the new card appears instantly
+    customItems.value = await getCustomItems()
+  } catch (e) {
+    ElMessage.error(e.message || '保存失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+const handleDeleteCustom = async (item) => {
+  try {
+    await ElMessageBox.confirm(`确定要删除"${item.name}"吗?`, '删除自定义品项', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消'
+    })
+    await deleteCustomItem(item.id)
+    customItems.value = customItems.value.filter(i => i.id !== item.id)
+    ElMessage.success('已删除')
+  } catch {
+    // user cancelled
+  }
 }
 
 const searchMembers = async (keyword) => {
@@ -245,7 +286,7 @@ const searchMembers = async (keyword) => {
 }
 
 const addToCart = (item) => {
-  const itemType = item.category === 'retail' ? 'product' : 'service'
+  const itemType = item._isCustom ? 'custom' : (item.category === 'retail' ? 'product' : 'service')
   const existing = cart.value.find(i => i.itemId === item.id && i.itemType === itemType)
   if (existing) {
     existing.quantity += 1
@@ -256,8 +297,7 @@ const addToCart = (item) => {
       itemName: item.name,
       price: Number(item.price),
       cost: Number(item.cost || 0),
-      quantity: 1,
-      _custom: false
+      quantity: 1
     })
   }
 }
@@ -269,7 +309,7 @@ const checkout = async () => {
   try {
     const res = await createOrder({
       memberId: walkInCustomer.value ? null : selectedMember.value?.id,
-      items: cart.value.map(({ _custom, ...rest }) => rest),
+      items: cart.value,
       paymentMethod: paymentMethod.value,
       receivedAmount: receivedAmount.value
     })
@@ -283,7 +323,7 @@ const checkout = async () => {
 const hangOrder = async () => {
   await createOrder({
     memberId: walkInCustomer.value ? null : selectedMember.value?.id,
-    items: cart.value.map(({ _custom, ...rest }) => rest),
+    items: cart.value,
     hang: true
   })
   ElMessage.success('挂单成功')
@@ -314,15 +354,14 @@ onMounted(loadItems)
   padding: 16px;
   overflow: auto;
 }
-.service-tabs {
-  margin-bottom: 16px;
-}
+.service-tabs { margin-bottom: 16px; }
 .item-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 12px;
 }
 .item-card {
+  position: relative;
   border: 1px solid #e4e7ed;
   border-radius: 8px;
   padding: 16px;
@@ -334,22 +373,38 @@ onMounted(loadItems)
   border-color: #409eff;
   box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
 }
+.item-card.is-custom {
+  border-style: dashed;
+  background: #fafbfc;
+}
+.item-delete {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f56c6c;
+  color: #fff;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.15s;
+  cursor: pointer;
+  z-index: 2;
+}
+.item-card:hover .item-delete { opacity: 1; }
+.item-delete:hover { background: #e04141; }
 .item-name {
   font-weight: 600;
   margin-bottom: 8px;
+  word-break: break-all;
 }
-.item-price {
-  color: #f56c6c;
-  font-size: 16px;
-}
-.item-stock {
-  color: #909399;
-  font-size: 11px;
-  margin-top: 4px;
-}
-.custom-add {
-  margin-top: 16px;
-}
+.item-price { color: #f56c6c; font-size: 16px; }
+.item-stock { color: #909399; font-size: 11px; margin-top: 4px; }
+.item-tag { color: #e6a23c; font-size: 11px; margin-top: 4px; }
+.custom-add { margin-top: 16px; }
 .cashier-right {
   width: 420px;
   background: #fff;
@@ -364,11 +419,7 @@ onMounted(loadItems)
   justify-content: space-between;
   font-weight: 600;
 }
-.cart-list {
-  flex: 1;
-  padding: 16px;
-  overflow: auto;
-}
+.cart-list { flex: 1; padding: 16px; overflow: auto; }
 .cart-item {
   display: flex;
   justify-content: space-between;
@@ -376,20 +427,9 @@ onMounted(loadItems)
   padding: 12px 0;
   border-bottom: 1px solid #f0f2f5;
 }
-.item-sub {
-  color: #909399;
-  font-size: 12px;
-  margin-top: 4px;
-}
-.cart-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.cart-footer {
-  padding: 16px;
-  border-top: 1px solid #e4e7ed;
-}
+.item-sub { color: #909399; font-size: 12px; margin-top: 4px; }
+.cart-actions { display: flex; align-items: center; gap: 8px; }
+.cart-footer { padding: 16px; border-top: 1px solid #e4e7ed; }
 .member-select {
   display: flex;
   align-items: center;
@@ -397,47 +437,19 @@ onMounted(loadItems)
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
-.balance-tip {
-  color: #67c23a;
-  font-size: 12px;
-}
+.balance-tip { color: #67c23a; font-size: 12px; }
 .total-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
 }
-.total-price {
-  font-size: 28px;
-  color: #f56c6c;
-  font-weight: 700;
-}
-.pay-row {
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-}
-.change-tip {
-  margin-left: 12px;
-  color: #67c23a;
-}
-.action-row {
-  display: flex;
-  gap: 12px;
-}
-.action-row .el-button {
-  flex: 1;
-}
-.receipt {
-  text-align: center;
-}
-.receipt-line {
-  display: flex;
-  justify-content: space-between;
-  margin: 8px 0;
-}
-.receipt-line.total {
-  font-weight: 700;
-  font-size: 16px;
-}
+.total-price { font-size: 28px; color: #f56c6c; font-weight: 700; }
+.pay-row { margin-bottom: 12px; display: flex; align-items: center; }
+.change-tip { margin-left: 12px; color: #67c23a; }
+.action-row { display: flex; gap: 12px; }
+.action-row .el-button { flex: 1; }
+.receipt { text-align: center; }
+.receipt-line { display: flex; justify-content: space-between; margin: 8px 0; }
+.receipt-line.total { font-weight: 700; font-size: 16px; }
 </style>

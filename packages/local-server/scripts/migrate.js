@@ -216,6 +216,20 @@ const tables = [
     setting_key VARCHAR(50) NOT NULL UNIQUE,
     setting_value TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+  // Persistent user-defined cashier items (saved from "+ 自定义品项" dialog).
+  // Rendered as cards in the cashier grid so cashiers can reuse common
+  // one-off entries (e.g. "剪指甲 ¥20") without re-typing.
+  `CREATE TABLE IF NOT EXISTS custom_cashier_items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    category ENUM('wash', 'groom', 'foster', 'retail') NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    price DECIMAL(10,2) DEFAULT 0,
+    created_by INT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_category (category),
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 ]
 

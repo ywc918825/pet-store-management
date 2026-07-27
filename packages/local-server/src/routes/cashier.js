@@ -31,6 +31,37 @@ router.get('/products', authMiddleware, requirePermission('cashier:operate'), as
   res.json(success(rows))
 })
 
+// Custom cashier items — user-defined persistent cards (e.g. "剪指甲 ¥20").
+// Rendered alongside service_items in the cashier grid so cashiers can
+// reuse common one-off entries without re-typing.
+router.get('/custom-items', authMiddleware, requirePermission('cashier:operate'), async (req, res) => {
+  const { category } = req.query
+  const params = []
+  let where = ' WHERE 1=1'
+  if (category) { where += ' AND category = ?'; params.push(category) }
+  const rows = await query(`SELECT id, category, name, price FROM custom_cashier_items ${where} ORDER BY id DESC`, params)
+  res.json(success(rows))
+})
+
+router.post('/custom-items', authMiddleware, requirePermission('cashier:operate'), async (req, res) => {
+  const { category, name, price } = req.body
+  if (!name || !String(name).trim()) return res.json(error('品项名称不能为空'))
+  const numPrice = Number(price)
+  if (!numPrice || numPrice <= 0) return res.json(error('价格必须大于 0'))
+  const allowedCats = ['wash', 'groom', 'foster', 'retail']
+  if (!allowedCats.includes(category)) return res.json(error('无效的类别'))
+  const result = await query(
+    'INSERT INTO custom_cashier_items (category, name, price, created_by) VALUES (?, ?, ?, ?)',
+    [category, String(name).trim(), numPrice, req.user.id]
+  )
+  res.json(success({ id: result.insertId }))
+})
+
+router.delete('/custom-items/:id', authMiddleware, requirePermission('cashier:operate'), async (req, res) => {
+  await query('DELETE FROM custom_cashier_items WHERE id = ?', [req.params.id])
+  res.json(success(null, '删除成功'))
+})
+
 router.get('/', authMiddleware, requirePermission('cashier:operate'), async (req, res) => {
   const page = Number(req.query.page || 1)
   const pageSize = Number(req.query.pageSize || 20)
