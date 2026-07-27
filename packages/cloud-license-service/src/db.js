@@ -8,13 +8,19 @@ const USE_PG = !!process.env.DATABASE_URL
 let pgPool = null
 function getPool() {
   if (!pgPool) {
-    pgPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('supabase')
-        ? { rejectUnauthorized: false }
-        : undefined,
-      max: 5
-    })
+    console.log('[db] Creating PG pool, DATABASE_URL=', process.env.DATABASE_URL ? 'SET' : 'UNSET')
+    try {
+      pgPool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('supabase')
+          ? { rejectUnauthorized: false }
+          : undefined,
+        max: 5
+      })
+    } catch (e) {
+      console.error('[db] Pool creation FAILED:', e.message)
+      throw e
+    }
   }
   return pgPool
 }
@@ -29,22 +35,42 @@ function prepare(sql) {
     const pgSql = toPgPlaceholders(sql)
     return {
       async get(...params) {
-        const { rows } = await getPool().query(pgSql, params)
-        return rows[0]
+        try {
+          const pool = getPool()
+          console.log('[db] pg.get sql=', pgSql.substring(0, 80))
+          const { rows } = await pool.query(pgSql, params)
+          return rows[0]
+        } catch (e) {
+          console.error('[db] pg.get ERROR:', e.message, '\n', e.stack || '')
+          throw e
+        }
       },
       async all(...params) {
-        const { rows } = await getPool().query(pgSql, params)
-        return rows
+        try {
+          const pool = getPool()
+          console.log('[db] pg.all sql=', pgSql.substring(0, 80))
+          const { rows } = await pool.query(pgSql, params)
+          return rows
+        } catch (e) {
+          console.error('[db] pg.all ERROR:', e.message, '\n', e.stack || '')
+          throw e
+        }
       },
       async run(...params) {
-        const result = await getPool().query(pgSql, params)
-        return { lastID: undefined, changes: result.rowCount }
+        try {
+          const pool = getPool()
+          console.log('[db] pg.run sql=', pgSql.substring(0, 80))
+          const result = await pool.query(pgSql, params)
+          return { lastID: undefined, changes: result.rowCount }
+        } catch (e) {
+          console.error('[db] pg.run ERROR:', e.message, '\n', e.stack || '')
+          throw e
+        }
       }
     }
   }
 
-  // Local SQLite mode — lazy-load via a separate module so that nft's static
-  // analysis never sees the native sqlite3 addon in this file's import graph.
+  // Local SQLite mode — lazy-load via separate module.
   let _sqlitePrepare = null
   async function _getSqlitePrepare() {
     if (!_sqlitePrepare) {
