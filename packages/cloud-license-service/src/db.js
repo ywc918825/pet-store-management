@@ -1,10 +1,4 @@
-// Database adapter — dual-mode:
-//   - Supabase/Postgres via `postgres` (pure JS, zero native bindings)
-//   - Local SQLite via dynamic import of db-sqlite-adapter.js
-//
-// The `postgres` package (porsager/postgres) is pure JavaScript with NO
-// native C++ addons — safe for top-level ESM import in Netlify Functions.
-
+// Database adapter — dual-mode with DEBUG mode
 import postgres from 'postgres'
 import dotenv from 'dotenv'
 
@@ -30,24 +24,24 @@ function getSql() {
 
 function prepare(queryStr) {
   if (USE_PG) {
-    const sql = getSql()
+    // DEBUG: return mock without touching DB — tests if crash is in connection
+    // const sql = getSql()
+    // return {
+    //   async get(...params) { ... },
+    //   ...
+    // }
     return {
-      async get(...params) {
-        let i = 0
-        const pgSql = queryStr.replace(/\?/g, () => `$${++i}`)
-        const rows = await sql.unsafe(pgSql, params)
-        return rows[0] || null
+      async get(/* ...params */) {
+        console.log('[db-mock] get:', queryStr.substring(0, 60))
+        return null
       },
-      async all(...params) {
-        let i = 0
-        const pgSql = queryStr.replace(/\?/g, () => `$${++i}`)
-        return await sql.unsafe(pgSql, params)
+      async all(/* ...params */) {
+        console.log('[db-mock] all:', queryStr.substring(0, 60))
+        return []
       },
-      async run(...params) {
-        let i = 0
-        const pgSql = queryStr.replace(/\?/g, () => `$${++i}`)
-        const result = await sql.unsafe(pgSql, params)
-        return { lastID: undefined, changes: result.count ?? result.rowCount }
+      async run(/* ...params */) {
+        console.log('[db-mock] run:', queryStr.substring(0, 60))
+        return { lastID: 1, changes: 1 }
       }
     }
   }
