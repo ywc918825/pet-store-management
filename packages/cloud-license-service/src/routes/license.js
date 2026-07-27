@@ -22,10 +22,12 @@ function computeStatus(binding, code) {
 
 // Client: get current license status from local server side
 router.get('/status', async (req, res) => {
+  // DEBUG: test if crash happens before or after DB call
   const machineId = req.headers['x-machine-id']
-  if (!machineId) {
-    return res.json({ code: 0, data: { status: 'locked', message: '未激活' } })
+  if (machineId) {
+    return res.json({ code: 0, _debug: 'handler-reached-before-db', machineId })
   }
+  return res.json({ code: 0, data: { status: 'locked', message: '未激活' } })
   const binding = await db.prepare('SELECT * FROM device_bindings WHERE machine_id = ? AND status = ?').get(machineId, 'active')
   if (!binding) {
     return res.json({ code: 0, data: { status: 'locked', message: '设备未绑定' } })
