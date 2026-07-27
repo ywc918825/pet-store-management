@@ -21,6 +21,12 @@ const app = express()
 app.use(cors(corsOptions))
 app.use(express.json())
 
+// Debug: log all requests
+app.use((req, res, next) => {
+  console.log('[app] request:', req.method, req.path)
+  next()
+})
+
 app.use('/api/license', licenseRoutes)
 app.use('/api/admin', adminRoutes)
 

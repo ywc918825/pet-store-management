@@ -22,6 +22,7 @@ function computeStatus(binding, code) {
 
 // Client: get current license status from local server side
 router.get('/status', async (req, res) => {
+  console.log('[license:status] ENTER, machineId=', req.headers['x-machine-id'] || 'NONE')
   const machineId = req.headers['x-machine-id']
   if (!machineId) {
     return res.json({ code: 0, data: { status: 'locked', message: '未激活' } })

@@ -88,6 +88,7 @@ router.post('/codes', adminAuth, async (req, res) => {
 
 // List activation codes
 router.get('/codes', adminAuth, async (req, res) => {
+  console.log('[admin:codes] ENTER, query=', JSON.stringify(req.query))
   const { status, page = 1, pageSize = 20 } = req.query
   let sql = 'SELECT * FROM activation_codes WHERE 1=1'
   const params = []
