@@ -2,10 +2,10 @@
 //   - Supabase/Postgres via `postgres` (pure JS, zero native bindings)
 //   - Local SQLite via dynamic import of db-sqlite-adapter.js
 //
-// The `postgres` package (porsager/postgres) is used instead of `pg` because it
-// has NO native C++ addons — critical for Netlify Functions where nft bundler
-// crashes on any .node binary at module load time.
+// The `postgres` package (porsager/postgres) is pure JavaScript with NO
+// native C++ addons — safe for top-level ESM import in Netlify Functions.
 
+import postgres from 'postgres'
 import dotenv from 'dotenv'
 
 dotenv.config()
@@ -13,13 +13,11 @@ dotenv.config()
 const USE_PG = !!process.env.DATABASE_URL
 
 // ---------------------------------------------------------------------------
-// Postgres (Supabase) mode — pure JS driver, no native bindings
+// Postgres (Supabase) mode
 // ---------------------------------------------------------------------------
 let _sql = null
 function getSql() {
   if (!_sql) {
-    // eslint-disable-next-line no-unused-vars
-    const postgres = require('postgres') // lazy CJS require to keep ESM graph clean
     _sql = postgres(process.env.DATABASE_URL, {
       ssl: process.env.DATABASE_URL?.includes('supabase') ? 'require' : undefined,
       max: 5,
@@ -35,7 +33,6 @@ function prepare(queryStr) {
     const sql = getSql()
     return {
       async get(...params) {
-        // Convert ? placeholders to $1, $2 for postgres unsafe()
         let i = 0
         const pgSql = queryStr.replace(/\?/g, () => `$${++i}`)
         const rows = await sql.unsafe(pgSql, params)
@@ -55,7 +52,7 @@ function prepare(queryStr) {
     }
   }
 
-  // --- Local SQLite mode (only when DATABASE_URL is not set) ---
+  // --- Local SQLite mode ---
   let _sqlitePrepare = null
   async function _getSqlitePrepare() {
     if (!_sqlitePrepare) {
