@@ -1,5 +1,8 @@
 import { Pool } from 'pg'
-import sqlite3 from 'sqlite3'
+// NOTE: sqlite3 is NOT imported at the top level — it's a native addon (.node
+// binary) that crashes Netlify Lambda at module load time even when the SQLite
+// code path is never reached (USE_PG=true).  We lazy-import it only inside
+// getSqlite() so the cloud deployment never touches the binary.
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
@@ -52,8 +55,12 @@ CREATE TABLE IF NOT EXISTS heartbeat_logs (
 `
 
 let sqliteDriver = null
-function getSqlite() {
+async function getSqlite() {
   if (!sqliteDriver) {
+    // Lazy-import the native sqlite3 addon only when SQLite is actually needed.
+    // On Netlify (USE_PG=true) this code path is never reached, so the
+    // native .node binary is never loaded and the Lambda doesn't crash.
+    const sqlite3 = (await import('sqlite3')).default
     // Compute __dirname lazily — only when SQLite is actually needed.
     // This avoids calling fileURLToPath(import.meta.url) at module load time,
     // which crashes on Netlify because the nft bundler leaves import.meta.url
@@ -114,7 +121,7 @@ function prepare(sql) {
     }
   }
 
-  const driver = getSqlite()
+  const driver = await getSqlite()
   return {
     get(...params) {
       return new Promise((resolve, reject) => {
