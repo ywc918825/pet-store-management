@@ -1,6 +1,5 @@
-// DEBUG: minimal db.js with ZERO imports to test if any import causes nft crash
+// DEBUG: minimal db.js — returns different status codes to trace crash
 function prepare(queryStr) {
-  console.log('[db-debug] prepare called:', queryStr?.substring(0, 60))
   return {
     async get() { return null },
     async all() { return [] },
