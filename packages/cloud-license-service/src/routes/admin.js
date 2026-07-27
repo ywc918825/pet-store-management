@@ -1,8 +1,11 @@
 import express from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import dayjs from 'dayjs'
-import db from '../db.js'
+import dbModule from '../db.js'
 import { signToken, verifyToken, verifyAdminPassword } from '../middleware/auth.js'
+
+// Netlify nft wraps ESM default exports as { default: X }
+const db = dbModule.default || dbModule
 
 const router = express.Router()
 
