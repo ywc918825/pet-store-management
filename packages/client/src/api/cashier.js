@@ -1,6 +1,7 @@
 import { request } from '@/utils/request'
 
 export const getServiceItems = (params) => request.get('/orders/service-items', { params })
+export const updateServiceItemStatus = (id, status) => request.patch(`/orders/service-items/${id}`, { status })
 export const getShopProducts = (params) => request.get('/orders/products', { params })
 export const getCustomItems = (params) => request.get('/orders/custom-items', { params })
 export const createCustomItem = (data) => request.post('/orders/custom-items', data)

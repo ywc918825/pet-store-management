@@ -20,6 +20,15 @@ router.get('/service-items', authMiddleware, requirePermission('cashier:operate'
   res.json(success(rows))
 })
 
+// 下架/上架系统服务项(收银面板管理)。下架后 status=0,不在面板显示;
+// 物理删除会破坏历史订单快照关联,故用 status 软开关,后台服务管理可重新上架。
+router.patch('/service-items/:id', authMiddleware, requirePermission('cashier:operate'), async (req, res) => {
+  const id = req.params.id
+  const newStatus = Number(req.body.status) === 0 ? 0 : 1
+  await query('UPDATE service_items SET status = ? WHERE id = ?', [newStatus, id])
+  res.json(success(null, newStatus === 0 ? '已下架' : '已上架'))
+})
+
 // Products available for cashier (stock > 0). Separate from the inventory
 // module so the cashier role does not need inventory:view permission.
 router.get('/products', authMiddleware, requirePermission('cashier:operate'), async (req, res) => {

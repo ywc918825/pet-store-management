@@ -20,6 +20,9 @@
           <div class="item-delete" v-if="item._isCustom" @click.stop="handleDeleteCustom(item)">
             <el-icon :size="14"><Close /></el-icon>
           </div>
+          <div class="item-delete" v-else-if="item._type === 'service'" @click.stop="handleHideService(item)">
+            <el-icon :size="14"><Close /></el-icon>
+          </div>
           <div class="item-name">{{ item.name }}</div>
           <div class="item-price">¥{{ item.price }}</div>
           <div v-if="activeCategory === 'retail' && !item._isCustom" class="item-stock">库存: {{ item.stock || 0 }}</div>
@@ -162,7 +165,7 @@
 <script setup>
 import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getServiceItems, getShopProducts, getCustomItems, createCustomItem, deleteCustomItem, createOrder } from '@/api/cashier'
+import { getServiceItems, getShopProducts, getCustomItems, createCustomItem, deleteCustomItem, updateServiceItemStatus, createOrder } from '@/api/cashier'
 import { getMemberList } from '@/api/member'
 import { useLicenseStore } from '@/store/modules/license'
 
@@ -192,13 +195,13 @@ const filteredItems = computed(() => {
   // Custom items: filter by category + tag as _isCustom
   const custom = customItems.value
     .filter(i => i.category === activeCategory.value)
-    .map(i => ({ ...i, _key: 'c' + i.id, _isCustom: true, price: Number(i.price) }))
+    .map(i => ({ ...i, _key: 'c' + i.id, _isCustom: true, _type: 'custom', price: Number(i.price) }))
 
   if (activeCategory.value === 'retail') {
-    return [...products.value.map(p => ({ ...p, _key: 'p' + p.id })), ...custom]
+    return [...products.value.map(p => ({ ...p, _key: 'p' + p.id, _type: 'product' })), ...custom]
   }
   return [
-    ...serviceItems.value.filter(i => i.category === activeCategory.value).map(i => ({ ...i, _key: 's' + i.id })),
+    ...serviceItems.value.filter(i => i.category === activeCategory.value).map(i => ({ ...i, _key: 's' + i.id, _type: 'service' })),
     ...custom
   ]
 })
@@ -269,6 +272,22 @@ const handleDeleteCustom = async (item) => {
     await deleteCustomItem(item.id)
     customItems.value = customItems.value.filter(i => i.id !== item.id)
     ElMessage.success('已删除')
+  } catch {
+    // user cancelled
+  }
+}
+
+// 下架系统服务项(非物理删除,status=0 软隐藏,后台服务管理可重新上架)
+const handleHideService = async (item) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要下架"${item.name}"吗？下架后该服务将不在收银面板显示,如需恢复可在后台服务管理中重新上架。`,
+      '下架服务项',
+      { type: 'warning', confirmButtonText: '下架', cancelButtonText: '取消' }
+    )
+    await updateServiceItemStatus(item.id, 0)
+    serviceItems.value = serviceItems.value.filter(i => i.id !== item.id)
+    ElMessage.success('已下架')
   } catch {
     // user cancelled
   }
