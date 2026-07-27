@@ -1,6 +1,7 @@
 import { request } from '@/utils/request'
 
 export const getServiceItems = (params) => request.get('/orders/service-items', { params })
+export const getShopProducts = (params) => request.get('/orders/products', { params })
 export const getHangTickets = () => request.get('/orders/hang')
 export const createOrder = (data) => request.post('/orders', data)
 export const getOrderList = (params) => request.get('/orders', { params })

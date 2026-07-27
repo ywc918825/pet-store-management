@@ -20,6 +20,17 @@ router.get('/service-items', authMiddleware, requirePermission('cashier:operate'
   res.json(success(rows))
 })
 
+// Products available for cashier (stock > 0). Separate from the inventory
+// module so the cashier role does not need inventory:view permission.
+router.get('/products', authMiddleware, requirePermission('cashier:operate'), async (req, res) => {
+  const { keyword } = req.query
+  const params = []
+  let where = ' WHERE status = 1 AND stock > 0'
+  if (keyword) { where += ' AND name LIKE ?'; params.push(`%${keyword}%`) }
+  const rows = await query(`SELECT id, code, name, category, unit, sale_price as price FROM products ${where} ORDER BY name`, params)
+  res.json(success(rows))
+})
+
 router.get('/', authMiddleware, requirePermission('cashier:operate'), async (req, res) => {
   const page = Number(req.query.page || 1)
   const pageSize = Number(req.query.pageSize || 20)
