@@ -22,10 +22,15 @@ function computeStatus(binding, code) {
 
 // Client: get current license status from local server side
 router.get('/status', async (req, res) => {
-  // DEBUG: test if crash happens before or after DB call
+  // DEBUG step 2: test if crash is in getSql() connection or sql.unsafe() query
   const machineId = req.headers['x-machine-id']
   if (machineId) {
-    return res.json({ code: 0, _debug: 'handler-reached-before-db', machineId })
+    try {
+      const stmt = db.prepare('SELECT 1')
+      return res.json({ code: 0, _debug: 'prepare-ok', hasUrl: !!process.env.DATABASE_URL, urlPrefix: process.env.DATABASE_URL?.substring(0, 30) })
+    } catch (e) {
+      return res.json({ code: 0, _debug: 'error-caught', error: e.message, stack: String(e.stack).slice(0, 500) })
+    }
   }
   return res.json({ code: 0, data: { status: 'locked', message: '未激活' } })
   const binding = await db.prepare('SELECT * FROM device_bindings WHERE machine_id = ? AND status = ?').get(machineId, 'active')
