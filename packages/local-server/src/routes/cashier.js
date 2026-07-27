@@ -7,6 +7,25 @@ import { generateOrderNo } from '../utils/crypto.js'
 
 const router = express.Router()
 
+// 发票打印数据:按订单号返回订单 + 明细 + 会员 + 收银员
+router.get('/invoice/:orderNo', authMiddleware, requirePermission('cashier:operate'), async (req, res) => {
+  const { orderNo } = req.params
+  const [orders] = await query(
+    `SELECT o.*, m.name as member_name, m.phone as member_phone
+     FROM orders o LEFT JOIN members m ON o.member_id = m.id
+     WHERE o.order_no = ?`,
+    [orderNo]
+  )
+  if (!orders || orders.length === 0) return res.json(error('订单不存在'))
+  const items = await query(
+    `SELECT oi.*, u.real_name as staff_name
+     FROM order_items oi LEFT JOIN users u ON oi.staff_id = u.id
+     WHERE oi.order_id = ?`,
+    [orders[0].id]
+  )
+  res.json(success({ ...orders[0], items }))
+})
+
 router.get('/service-items', authMiddleware, requirePermission('cashier:operate'), async (req, res) => {
   const { category } = req.query
   let sql = 'SELECT * FROM service_items WHERE status = 1'
@@ -36,7 +55,7 @@ router.get('/products', authMiddleware, requirePermission('cashier:operate'), as
   const params = []
   let where = ' WHERE status = 1 AND stock > 0'
   if (keyword) { where += ' AND name LIKE ?'; params.push(`%${keyword}%`) }
-  const rows = await query(`SELECT id, code, name, category, unit, sale_price as price FROM products ${where} ORDER BY name`, params)
+  const rows = await query(`SELECT id, code, name, category, unit, sale_price as price, purchase_price as cost FROM products ${where} ORDER BY name`, params)
   res.json(success(rows))
 })
 

@@ -132,6 +132,7 @@
         </div>
       </div>
       <template #footer>
+        <el-button @click="printInvoice">打印发票</el-button>
         <el-button type="primary" @click="receiptVisible = false; resetCart()">完成</el-button>
       </template>
     </el-dialog>
@@ -164,12 +165,14 @@
 
 <script setup>
 import { ref, computed, reactive, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getServiceItems, getShopProducts, getCustomItems, createCustomItem, deleteCustomItem, updateServiceItemStatus, createOrder } from '@/api/cashier'
 import { getMemberList } from '@/api/member'
 import { useLicenseStore } from '@/store/modules/license'
 
 const licenseStore = useLicenseStore()
+const router = useRouter()
 const activeCategory = ref('wash')
 const serviceItems = ref([])
 const products = ref([])
@@ -355,6 +358,12 @@ const resetCart = () => {
   walkInCustomer.value = false
   paymentMethod.value = 'cash'
   receivedAmount.value = 0
+}
+
+const printInvoice = () => {
+  if (!lastOrder.orderNo) return
+  receiptVisible.value = false
+  router.push(`/invoice/${lastOrder.orderNo}`)
 }
 
 onMounted(loadItems)

@@ -29,6 +29,12 @@ const routes = [
     meta: { public: true }
   },
   {
+    path: '/invoice/:orderNo',
+    name: 'Invoice',
+    component: () => import('@/views/invoice/index.vue'),
+    meta: { standalone: true }
+  },
+  {
     path: '/',
     name: 'Layout',
     component: () => import('@/layout/index.vue'),
