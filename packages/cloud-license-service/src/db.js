@@ -1,76 +1,61 @@
-import { Pool } from 'pg'
+// Database adapter — dual-mode:
+//   - Supabase/Postgres via `postgres` (pure JS, zero native bindings)
+//   - Local SQLite via dynamic import of db-sqlite-adapter.js
+//
+// The `postgres` package (porsager/postgres) is used instead of `pg` because it
+// has NO native C++ addons — critical for Netlify Functions where nft bundler
+// crashes on any .node binary at module load time.
+
 import dotenv from 'dotenv'
 
 dotenv.config()
 
 const USE_PG = !!process.env.DATABASE_URL
 
-let pgPool = null
-function getPool() {
-  if (!pgPool) {
-    console.log('[db] Creating PG pool, DATABASE_URL=', process.env.DATABASE_URL ? 'SET' : 'UNSET')
-    try {
-      pgPool = new Pool({
-        connectionString: process.env.DATABASE_URL,
-        ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('supabase')
-          ? { rejectUnauthorized: false }
-          : undefined,
-        max: 5
-      })
-    } catch (e) {
-      console.error('[db] Pool creation FAILED:', e.message)
-      throw e
-    }
+// ---------------------------------------------------------------------------
+// Postgres (Supabase) mode — pure JS driver, no native bindings
+// ---------------------------------------------------------------------------
+let _sql = null
+function getSql() {
+  if (!_sql) {
+    // eslint-disable-next-line no-unused-vars
+    const postgres = require('postgres') // lazy CJS require to keep ESM graph clean
+    _sql = postgres(process.env.DATABASE_URL, {
+      ssl: process.env.DATABASE_URL?.includes('supabase') ? 'require' : undefined,
+      max: 5,
+      idle_timeout: 20,
+      connect_timeout: 10
+    })
   }
-  return pgPool
+  return _sql
 }
 
-function toPgPlaceholders(sql) {
-  let i = 0
-  return sql.replace(/\?/g, () => `$${++i}`)
-}
-
-function prepare(sql) {
+function prepare(queryStr) {
   if (USE_PG) {
-    const pgSql = toPgPlaceholders(sql)
+    const sql = getSql()
     return {
       async get(...params) {
-        try {
-          const pool = getPool()
-          console.log('[db] pg.get sql=', pgSql.substring(0, 80))
-          const { rows } = await pool.query(pgSql, params)
-          return rows[0]
-        } catch (e) {
-          console.error('[db] pg.get ERROR:', e.message, '\n', e.stack || '')
-          throw e
-        }
+        // Convert ? placeholders to $1, $2 for postgres unsafe()
+        let i = 0
+        const pgSql = queryStr.replace(/\?/g, () => `$${++i}`)
+        const rows = await sql.unsafe(pgSql, params)
+        return rows[0] || null
       },
       async all(...params) {
-        try {
-          const pool = getPool()
-          console.log('[db] pg.all sql=', pgSql.substring(0, 80))
-          const { rows } = await pool.query(pgSql, params)
-          return rows
-        } catch (e) {
-          console.error('[db] pg.all ERROR:', e.message, '\n', e.stack || '')
-          throw e
-        }
+        let i = 0
+        const pgSql = queryStr.replace(/\?/g, () => `$${++i}`)
+        return await sql.unsafe(pgSql, params)
       },
       async run(...params) {
-        try {
-          const pool = getPool()
-          console.log('[db] pg.run sql=', pgSql.substring(0, 80))
-          const result = await pool.query(pgSql, params)
-          return { lastID: undefined, changes: result.rowCount }
-        } catch (e) {
-          console.error('[db] pg.run ERROR:', e.message, '\n', e.stack || '')
-          throw e
-        }
+        let i = 0
+        const pgSql = queryStr.replace(/\?/g, () => `$${++i}`)
+        const result = await sql.unsafe(pgSql, params)
+        return { lastID: undefined, changes: result.count ?? result.rowCount }
       }
     }
   }
 
-  // Local SQLite mode — lazy-load via separate module.
+  // --- Local SQLite mode (only when DATABASE_URL is not set) ---
   let _sqlitePrepare = null
   async function _getSqlitePrepare() {
     if (!_sqlitePrepare) {
@@ -82,15 +67,15 @@ function prepare(sql) {
 
   return {
     async get(...params) {
-      const fn = (await _getSqlitePrepare())(sql)
+      const fn = (await _getSqlitePrepare())(queryStr)
       return fn.get(...params)
     },
     async all(...params) {
-      const fn = (await _getSqlitePrepare())(sql)
+      const fn = (await _getSqlitePrepare())(queryStr)
       return fn.all(...params)
     },
     async run(...params) {
-      const fn = (await _getSqlitePrepare())(sql)
+      const fn = (await _getSqlitePrepare())(queryStr)
       return fn.run(...params)
     }
   }
